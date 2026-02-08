@@ -5,7 +5,11 @@ import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import me.cortex.voxy.common.Logger;
 import me.cortex.voxy.common.config.IMappingStorage;
 import me.cortex.voxy.common.util.Pair;
+import me.cortex.voxy.common.world.other.Mapper.BiomeEntry;
+import me.cortex.voxy.common.world.other.Mapper.StateEntry;
 import net.minecraft.SharedConstants;
+import net.minecraft.client.Minecraft;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtAccounter;
@@ -84,10 +88,6 @@ public class Mapper {
 
     public static long withLight(long id, int light) {
         return (id&(~(0xFFL<<56)))|(Integer.toUnsignedLong(light&0xFF)<<56);
-    }
-
-    public static long withBlockBiome(long id, int block, int biome) {
-        return (id&(0xFFL<<56))|(Integer.toUnsignedLong(block)<<27)|(Integer.toUnsignedLong(biome)<<47);
     }
 
     public static long airWithLight(int light) {
@@ -189,8 +189,8 @@ public class Mapper {
         }
 
         entry = new StateEntry(this.blockId2stateEntry.size(), state);
-        this.blockId2stateEntry.add(entry);
         this.block2stateEntry.put(state, entry);
+        this.blockId2stateEntry.add(entry);
         this.blockLock.unlock();
 
         byte[] serialized = entry.serialize();
@@ -212,8 +212,8 @@ public class Mapper {
             return entry;
         }
         entry = new BiomeEntry(this.biomeId2biomeEntry.size(), biome);
-        this.biomeId2biomeEntry.add(entry);
         this.biome2biomeEntry.put(biome, entry);
+        this.biomeId2biomeEntry.add(entry);
         this.biomeLock.unlock();
 
         byte[] serialized = entry.serialize();
@@ -238,6 +238,7 @@ public class Mapper {
         return this.blockId2stateEntry.get(blockId).state;
     }
 
+    //TODO: replace lambda with a class cached lambda ref (cause doing this:: still does a lambda allocation)
     public int getIdForBlockState(BlockState state) {
         if (state.isAir()) {
             return 0;
@@ -258,7 +259,7 @@ public class Mapper {
     }
 
     public int getIdForBiome(Holder<Biome> biome) {
-        String biomeId = biome.unwrapKey().get().identifier().toString();
+        String biomeId = biome.unwrapKey().get().location().toString();
         var entry = this.biome2biomeEntry.get(biomeId);
         if (entry == null) {
             entry = this.registerNewBiome(biomeId);
@@ -357,7 +358,7 @@ public class Mapper {
             if (state.getBlock() instanceof LeavesBlock) {
                 this.opacity = 15;
             } else {
-                this.opacity = state.getLightBlock();
+                this.opacity = state.getLightBlock(Minecraft.getInstance().level, new BlockPos(0,0,0));
             }
         }
 
@@ -377,14 +378,14 @@ public class Mapper {
         public static StateEntry deserialize(int id, byte[] data, boolean[] forceResave) {
             try {
                 var compound = NbtIo.readCompressed(new ByteArrayInputStream(data), NbtAccounter.unlimitedHeap());
-                if (compound.getIntOr("id", -1) != id) {
+                if (compound.getInt("id") != id) {
                     throw new IllegalStateException("Encoded id != expected id");
                 }
-                var bsc = compound.getCompound("block_state").orElseThrow();
+                var bsc = compound.getCompound("block_state");
                 var state = BlockState.CODEC.parse(NbtOps.INSTANCE, bsc);
                 if (state.isError()) {
                     Logger.info("Could not decode blockstate, attempting fixes, error: "+ state.error().get().message());
-                    bsc = (CompoundTag) DataFixers.getDataFixer().update(References.BLOCK_STATE, new Dynamic<>(NbtOps.INSTANCE,bsc),0, SharedConstants.getCurrentVersion().dataVersion().version()).getValue();
+                    bsc = (CompoundTag) DataFixers.getDataFixer().update(References.BLOCK_STATE, new Dynamic<>(NbtOps.INSTANCE,bsc),0, SharedConstants.getCurrentVersion().getDataVersion().getVersion()).getValue();
                     state = BlockState.CODEC.parse(NbtOps.INSTANCE, bsc);
                     if (state.isError()) {
                         Logger.error("Could not decode blockstate setting to air. id:" + id + " error: " + state.error().get().message());
@@ -428,10 +429,10 @@ public class Mapper {
         public static BiomeEntry deserialize(int id, byte[] data) {
             try {
                 var compound = NbtIo.readCompressed(new ByteArrayInputStream(data), NbtAccounter.unlimitedHeap());
-                if (compound.getIntOr("id", -1) != id) {
+                if (compound.getInt("id") != id) {
                     throw new IllegalStateException("Encoded id != expected id");
                 }
-                String biome = compound.getStringOr("biome_id", null);
+                String biome = compound.getString("biome_id");
                 return new BiomeEntry(id, biome);
             } catch (IOException e) {
                 throw new RuntimeException(e);

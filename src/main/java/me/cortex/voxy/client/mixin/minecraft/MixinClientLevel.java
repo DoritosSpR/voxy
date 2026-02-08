@@ -11,11 +11,14 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.SectionPos;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.util.profiling.ProfilerFiller;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.dimension.DimensionType;
+
+import java.util.function.Supplier;
+
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -42,12 +45,12 @@ public abstract class MixinClientLevel {
             Holder<DimensionType> dimensionType,
             int loadDistance,
             int simulationDistance,
+            Supplier<ProfilerFiller> profiler,
             LevelRenderer worldRenderer,
             boolean debugWorld,
             long seed,
-            int seaLevel,
             CallbackInfo cir) {
-        this.bottomSectionY = ((Level)(Object)this).getMinY()>>4;
+        this.bottomSectionY = ((Level)(Object)this).getMinBuildHeight()>>4;
     }
 
     @Inject(method = "setBlocksDirty", at = @At("TAIL"))
@@ -71,17 +74,14 @@ public abstract class MixinClientLevel {
         int z = pos.getZ()&15;
         if (x == 0 || x==15 || y==0 || y==15 || z==0||z==15) {//Update if there is a statechange on the boarder
             var csp = SectionPos.of(pos);
-            //Is not using voxy$cheekyGetChunk as dont think is need
-            var chunk = self.getChunk(pos.getX()>>4, pos.getZ()>>4, ChunkStatus.FULL, false);
-            if (chunk != null) {
-                var section = chunk.getSection(csp.y() - this.bottomSectionY);
-                var lp = self.getLightEngine();
 
-                var blp = lp.getLayerListener(LightLayer.BLOCK).getDataLayerData(csp);
-                var slp = lp.getLayerListener(LightLayer.SKY).getDataLayerData(csp);
+            var section = self.getChunk(pos).getSection(csp.y()-this.bottomSectionY);
+            var lp = self.getLightEngine();
 
-                VoxelIngestService.rawIngest(wi, section, csp.x(), csp.y(), csp.z(), blp == null ? null : blp.copy(), slp == null ? null : slp.copy());
-            }
+            var blp = lp.getLayerListener(LightLayer.BLOCK).getDataLayerData(csp);
+            var slp = lp.getLayerListener(LightLayer.SKY).getDataLayerData(csp);
+
+            VoxelIngestService.rawIngest(wi, section, csp.x(), csp.y(), csp.z(), blp==null?null:blp.copy(), slp==null?null:slp.copy());
         }
     }
 }

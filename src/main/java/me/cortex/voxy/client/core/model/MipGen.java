@@ -7,10 +7,10 @@ import org.lwjgl.system.MemoryUtil;
 
 import java.util.Arrays;
 
-import static me.cortex.voxy.client.core.model.ModelFactory.LAYERS;
 import static me.cortex.voxy.client.core.model.ModelFactory.MODEL_TEXTURE_SIZE;
 
 public class MipGen {
+    private static final int MIP_LAYERS = Integer.numberOfTrailingZeros(MODEL_TEXTURE_SIZE);
     static {
         if (MODEL_TEXTURE_SIZE>16) throw new IllegalStateException("TODO: THIS MUST BE UPDATED, IT CURRENTLY ASSUMES 16 OR SMALLER SIZE");
     }
@@ -84,7 +84,7 @@ public class MipGen {
             int j = 0;
             boolean anyTransparent = false;
             for (int t : textures[i].colour()) {
-                int o = ((y+(j>>LAYERS))*LENGTH_B + ((j&(MODEL_TEXTURE_SIZE-1))+x))*4; j++;//LAYERS here is just cause faster
+                int o = ((y+(j>>MIP_LAYERS))*LENGTH_B + ((j&(MODEL_TEXTURE_SIZE-1))+x))*4; j++;//MIP_LAYERS here is just cause faster
                 //t = ((t&0xFF000000)==0)?0x00_FF_00_FF:t;//great for testing
                 MemoryUtil.memPutInt(addr+o, t);
                 anyTransparent |= ((t&0xFF000000)==0);
@@ -99,7 +99,7 @@ public class MipGen {
 
         //Mip the scratch
         long dAddr = addr;
-        for (int i = 0; i < LAYERS-1; i++) {
+        for (int i = 0; i < MIP_LAYERS-1; i++) {
             long sAddr = dAddr;
             dAddr += (MODEL_TEXTURE_SIZE*MODEL_TEXTURE_SIZE*3*2*4)>>(i<<1);//is.. i*2 because shrink both MODEL_TEXTURE_SIZE by >>i so is 2*i total shift
             int width = (MODEL_TEXTURE_SIZE*3)>>(i+1);
@@ -113,7 +113,7 @@ public class MipGen {
                     int C01 = MemoryUtil.memGetInt(bp+sWidth*4);
                     int C10 = MemoryUtil.memGetInt(bp+4);
                     int C11 = MemoryUtil.memGetInt(bp+sWidth*4+4);
-                    MemoryUtil.memPutInt(dAddr + (px+py*width) * 4L, TextureUtils.mipColours(darkened, C00, C01, C10, C11));
+                    MemoryUtil.memPutInt(dAddr + (px+py*width) * 4L, TextureUtils.mipColours(C00, C01, C10, C11));
                 }
             }
         }

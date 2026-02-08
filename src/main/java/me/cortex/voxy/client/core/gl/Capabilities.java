@@ -3,6 +3,7 @@ package me.cortex.voxy.client.core.gl;
 import me.cortex.voxy.client.core.gl.shader.ShaderType;
 import me.cortex.voxy.common.Logger;
 import org.lwjgl.opengl.GL;
+import org.lwjgl.opengl.GLCapabilities;
 import org.lwjgl.opengl.GL11C;
 import org.lwjgl.opengl.GL20C;
 import org.lwjgl.opengl.GL30;
@@ -10,6 +11,7 @@ import org.lwjgl.system.MemoryUtil;
 
 import java.util.Locale;
 import java.util.Random;
+import java.util.StringJoiner;
 
 import static org.lwjgl.opengl.GL11.GL_NEAREST;
 import static org.lwjgl.opengl.GL11.GL_TEXTURE_2D;
@@ -110,6 +112,42 @@ public class Capabilities {
     }
 
     public static void init() {
+    }
+
+    public String getMissingCoreRequirements() {
+        StringJoiner missing = new StringJoiner(", ");
+        if (!this.compute) {
+            missing.add("compute-dispatch-indirect");
+        }
+        if (!this.indirectParameters) {
+            missing.add("arb_indirect_parameters");
+        }
+        if (missing.length() == 0) {
+            missing.add("<none>");
+        }
+        return missing.toString();
+    }
+
+    public String getCapabilitySnapshot() {
+        GLCapabilities cap = GL.getCapabilities();
+
+        boolean hasDispatchCompute = cap.glDispatchCompute != 0;
+        boolean hasDispatchComputeIndirect = cap.glDispatchComputeIndirect != 0;
+        boolean hasMDICount = cap.glMultiDrawElementsIndirectCountARB != 0;
+        boolean hasCreateBuffers = cap.glCreateBuffers != 0;
+        boolean hasNamedBufferStorage = cap.glNamedBufferStorage != 0;
+        boolean hasBindTextureUnit = cap.glBindTextureUnit != 0;
+        boolean hasCreateFramebuffers = cap.glCreateFramebuffers != 0;
+
+        return "vendor='" + glGetString(GL_VENDOR) + "', renderer='" + glGetString(GL_RENDERER) + "', version='" + glGetString(GL_VERSION)
+                + "', coreFlags={compute=" + this.compute + ", indirectParameters=" + this.indirectParameters + ", subgroup=" + this.subgroup + ", int64=" + this.INT64_t + "}"
+                + ", fnPtrs={glDispatchCompute=" + hasDispatchCompute
+                + ", glDispatchComputeIndirect=" + hasDispatchComputeIndirect
+                + ", glMultiDrawElementsIndirectCountARB=" + hasMDICount
+                + ", glCreateBuffers=" + hasCreateBuffers
+                + ", glNamedBufferStorage=" + hasNamedBufferStorage
+                + ", glBindTextureUnit=" + hasBindTextureUnit
+                + ", glCreateFramebuffers=" + hasCreateFramebuffers + "}";
     }
 
     private static boolean testDepthSampler() {

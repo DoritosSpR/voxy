@@ -9,6 +9,7 @@ import it.unimi.dsi.fastutil.objects.Object2ObjectLinkedOpenHashMap;
 import me.cortex.voxy.common.Logger;
 import net.irisshaders.iris.shaderpack.ShaderPack;
 import net.irisshaders.iris.shaderpack.include.AbsolutePackPath;
+import org.apache.commons.logging.Log;
 import org.lwjgl.opengl.ARBDrawBuffersBlend;
 
 import java.lang.reflect.Modifier;
@@ -22,11 +23,9 @@ import static org.lwjgl.opengl.GL33.*;
 
 public class IrisShaderPatch {
     public static final int VERSION = ((IntSupplier)()->1).getAsInt();
-    public static final int SHADER_DEFINE_VERSION = 1;
-
-
 
     public static final boolean IMPERSONATE_DISTANT_HORIZONS = System.getProperty("voxy.impersonateDHShader", "false").equalsIgnoreCase("true");
+
 
 
     private static final class SSBODeserializer implements JsonDeserializer<Int2ObjectOpenHashMap<String>> {
@@ -178,7 +177,6 @@ public class IrisShaderPatch {
         public boolean excludeLodsFromVanillaDepth;
         public float[] renderScale;
         public boolean useViewportDims;
-        //public boolean deferTranslucentRendering;
         public String checkValid() {
             if (this.blending != null) {
                 int i = 0;
@@ -271,10 +269,6 @@ public class IrisShaderPatch {
         return new float[]{Math.max(0.01f,this.patchData.renderScale[0]),Math.max(0.01f,this.patchData.renderScale[1])};
     }
 
-    public boolean deferedTranslucentRendering() {
-        return false;//this.patchData.deferTranslucentRendering;
-    }
-
     public Runnable createBlendSetup() {
         if (this.patchData.blending == null || this.patchData.blending.isEmpty()) {
             return ()->{};//No blending change
@@ -307,7 +301,7 @@ public class IrisShaderPatch {
 
     private static final Gson GSON = new GsonBuilder()
             .excludeFieldsWithModifiers(Modifier.PRIVATE)
-            .setStrictness(Strictness.LENIENT)
+            .setLenient()
             .create();
 
     public static IrisShaderPatch makePatch(ShaderPack ipack, AbsolutePackPath directory, Function<AbsolutePackPath, String> sourceProvider) {
