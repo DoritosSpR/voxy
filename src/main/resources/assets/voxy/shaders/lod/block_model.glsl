@@ -42,3 +42,9 @@ bool modelIsTranslucent(BlockModel model) {
 bool modelIsShaded(BlockModel model) {
     return ((model.flagsA)&8u) != 0;
 }
+
+// Backport compatibility: older shader sources still call modelHasMipmaps().
+// In this shader model format, the same bit is used for this behavior.
+bool modelHasMipmaps(BlockModel model) {
+    return modelIsShaded(model);
+}
