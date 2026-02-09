@@ -157,7 +157,9 @@ void main() {
     }
 
     //Check the minimum bounding texture and ensure we are greater than it
-    if (gl_FragCoord.z < texelFetch(depthTex, ivec2(gl_FragCoord.xy), 0).r) {
+    float depthBound = texelFetch(depthTex, ivec2(gl_FragCoord.xy), 0).r;
+    // Small conservative bias stabilizes the Voxy/vanilla boundary against precision jitter.
+    if (gl_FragCoord.z < (depthBound + 0.00002f)) {
         discard;
         return;
     }
@@ -246,4 +248,3 @@ colour = textureGrad(blockModelAtlas, texPos, dx, dy);
 //#else
 //colour = texture(blockModelAtlas, texPos);
 //#endif
-

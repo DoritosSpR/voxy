@@ -32,6 +32,8 @@ import static org.lwjgl.opengl.GL42.glDrawElementsInstancedBaseInstance;
 // it renders an AABB around loaded chunks, thats it
 public class ChunkBoundRenderer {
     private static final int INIT_MAX_CHUNK_COUNT = 1<<12;
+    // Delay section removals slightly to avoid one-frame border flicker when section state flaps during rebuilds.
+    private static final int REMOVE_GRACE_FRAMES = 4;
     private GlBuffer chunkPosBuffer = new GlBuffer(INIT_MAX_CHUNK_COUNT*8);//Stored as ivec2
     private final GlBuffer uniformBuffer = new GlBuffer(128);
     private final Long2IntOpenHashMap chunk2idx = new Long2IntOpenHashMap(INIT_MAX_CHUNK_COUNT);
@@ -40,10 +42,12 @@ public class ChunkBoundRenderer {
 
     private final LongOpenHashSet addQueue = new LongOpenHashSet();
     private final LongOpenHashSet remQueue = new LongOpenHashSet();
+    private final Long2IntOpenHashMap delayedRemovals = new Long2IntOpenHashMap();
 
     private final AbstractRenderPipeline pipeline;
     public ChunkBoundRenderer(AbstractRenderPipeline pipeline) {
         this.chunk2idx.defaultReturnValue(-1);
+        this.delayedRemovals.defaultReturnValue(-1);
         this.pipeline = pipeline;
 
         String vert = ShaderLoader.parse("voxy:chunkoutline/outline.vsh");
@@ -61,19 +65,37 @@ public class ChunkBoundRenderer {
     }
 
     public void addSection(long pos) {
+        this.delayedRemovals.remove(pos);
         if (!this.remQueue.remove(pos)) {
             this.addQueue.add(pos);
         }
     }
 
     public void removeSection(long pos) {
+        if (this.chunk2idx.get(pos) == -1) {
+            return;
+        }
         if (!this.addQueue.remove(pos)) {
-            this.remQueue.add(pos);
+            this.delayedRemovals.put(pos, REMOVE_GRACE_FRAMES);
         }
     }
 
     //Bind and render, changing as little gl state as possible so that the caller may configure how it wants to render
     public void render(Viewport<?> viewport) {
+        if (!this.delayedRemovals.isEmpty()) {
+            var itr = this.delayedRemovals.long2IntEntrySet().fastIterator();
+            while (itr.hasNext()) {
+                var entry = itr.next();
+                int frames = entry.getIntValue() - 1;
+                if (frames <= 0) {
+                    this.remQueue.add(entry.getLongKey());
+                    itr.remove();
+                } else {
+                    entry.setValue(frames);
+                }
+            }
+        }
+
         if (!this.remQueue.isEmpty()) {
             boolean wasEmpty = this.chunk2idx.isEmpty();
             this.remQueue.forEach(this::_remPos);//TODO: REPLACE WITH SCATTER COMPUTE
@@ -224,6 +246,9 @@ public class ChunkBoundRenderer {
 
     public void reset() {
         this.chunk2idx.clear();
+        this.addQueue.clear();
+        this.remQueue.clear();
+        this.delayedRemovals.clear();
     }
 
     public void free() {
