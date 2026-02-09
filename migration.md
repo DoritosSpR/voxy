@@ -84,6 +84,16 @@ Backport `voxy` from Minecraft `1.21.11` to `1.21.1` on branch `codex/backport-1
 - Windows re-test (log bundle `artifacts/winbe-logs/20260207-202312`): world join succeeds with Voxy renderer active (`NormalRenderPipeline` + `MDICSectionRenderer`), Nvidium enabled, and no crash report generated.
 - Iris shaderpack popup diagnosis (same run): enabling BSL shaderpack triggered Voxy log `The following uniforms could not be found: [endFlashIntensity]` (non-fatal compatibility mismatch). Adjusted `IrisVoxyRenderPipelineData` to log this as warning instead of error to avoid intrusive popup while still recording the mismatch.
 - Added reproducible Chunky pregen procedure for validation runs: configure Chunky with `continueOnRestart=true` and execute a 64-chunk circular region task (`/chunky spawn`, `/chunky shape circle`, `/chunky radius 64`, `/chunky pattern concentric`, `/chunky start`).
+- Shaderpack compatibility research (2026-02-08):
+  - Photon `v1.2a` (Modrinth `rz2vlXVm`, 2025-06-29) does not contain `shaders/program/voxy.json` or `voxy_*.glsl`, so release builds on that tag cannot activate Voxy-specific Iris patching.
+  - Photon `main` branch zip (`https://github.com/sixthsurge/photon/archive/refs/heads/main.zip`) includes full Voxy integration files: `shaders/program/voxy.json`, `shaders/program/voxy_opaque.glsl`, `shaders/program/voxy_translucent.glsl`, world wrappers, and `shaders/include/misc/lod_mod_support.glsl` with `VOXY` paths (`vxDepthTex*`, `vxProj*`, `vxRenderDistance`).
+  - Photon upstream issue `#512` (`Render Error With Voxy`) includes maintainer guidance dated 2026-02-06 to use `main` instead of `1.2a` for Voxy compatibility.
+  - BSL `v10.1.1` (Modrinth `NDEQ77pU`, 2026-02-07) already ships full Voxy patch files (`voxy.json`, `voxy_opaque.glsl`, `voxy_translucent.glsl`) in `program/` plus `world-1/world0/world1` includes.
+  - BSL `v10.1` and `v10.1.1` share identical `voxy.json`; only `voxy_opaque.glsl` and `voxy_translucent.glsl` changed (alpha-guard logic adjustment), indicating ongoing shader-side Voxy fixes independent of Voxy mod code.
+- External launcher crash analysis (2026-02-08): third-party run failed on `MixinMinecraft` with `InvalidInjectionException` targeting `disconnect(...;ZZ)V`. Root cause: stale `1.21.11` signature in `src/main/java/me/cortex/voxy/client/mixin/minecraft/MixinMinecraft.java`; `1.21.1` exposes `disconnect(Screen, boolean)` / `disconnect(Screen)` instead. Patched mixin to target both `1.21.1` signatures with `require = 0`, rebuilt via `./gradlew --no-daemon remapJar`, and verified remapped output now targets intermediary `method_18096(Lnet/minecraft/class_437;Z)V` and `method_56134(Lnet/minecraft/class_437;)V` without remap warnings.
+- External launcher crash follow-up (2026-02-07 21:05:28 on `winbe`): crash report `/Users/saejin/crash-2026-02-07_21.05.28-client.txt` indicates `NullPointerException` in `team.creative.ambientsounds.engine.AmbientEngine.fastTick` (`soundEngine` null) during Fabric end-tick event. No `me.cortex.voxy` frames appear in the exception chain; this failure is attributable to AmbientSounds/CreativeCore in the tested pack, not Voxy.
+- Border flicker mitigation pass (2026-02-08): added a short chunk-bound removal grace window (`REMOVE_GRACE_FRAMES=4`) in `ChunkBoundRenderer` to prevent one-frame Voxy/vanilla boundary flapping during transient Sodium section rebuild transitions; also added a small conservative depth epsilon (`+0.00002`) in `assets/voxy/shaders/lod/gl46/quads.frag` depth-bound discard test to reduce precision jitter at transition edges. Rebuilt with `./gradlew --no-daemon remapJar` (`BUILD SUCCESSFUL`).
+- Early occlusion culling mitigation pass (2026-02-08): made hierarchical Hi-Z culling in `assets/voxy/shaders/lod/hierarchical/screenspace.glsl` more conservative by adding mip-scaled depth bias (`hizDepthBias = 0.00025 + ml * 0.00015`) and guarding invalid samples (`pointSample < 0 => visible`) before occlusion compare. Rebuilt with `./gradlew --no-daemon remapJar` (`BUILD SUCCESSFUL`).
 
 # Decision Log
 - 2026-02-07: Milestone locked to `Core + Major Compat`.
@@ -91,6 +101,9 @@ Backport `voxy` from Minecraft `1.21.11` to `1.21.1` on branch `codex/backport-1
 - 2026-02-07: Track migration state in `migration.md` as source of truth.
 - 2026-02-07: Reused old backport (`9dbb8174`) as a compatibility base for Java/resource files, then reconciled with current branch constructor/signature differences.
 - 2026-02-07: Removed 1.21.11-only Sodium config API classes (`SodiumConfigBuilder`, `VoxyConfigMenu`) and switched ModMenu config integration to Sodium 0.6.x UI path.
+- 2026-02-08: Photon shaderpack support baseline is `main` branch Voxy files (not Modrinth `v1.2a`); treat `main` Voxy assets as reference for any local patching or downstream support docs.
+- 2026-02-08: Keep missing Iris shader uniforms non-fatal for shaderpack interoperability; maintain warn-level logging for unresolved optional uniforms (for example `endFlashIntensity` in tested BSL run).
+- 2026-02-08: `MixinMinecraft` world-close hook must be version-tolerant on `1.21.1`; avoid `1.21.11`-specific disconnect descriptors.
 
 # Open Issues
 - Full in-world Voxy rendering validation is blocked on this machine due to OpenGL capability (`4.1 Metal`) and Voxy’s runtime support gate.
@@ -99,3 +112,5 @@ Backport `voxy` from Minecraft `1.21.11` to `1.21.1` on branch `codex/backport-1
 - `winbe` copy automation depends on SMB authentication/share details (or pre-mounted Finder share) before first sync can run.
 - Pending verification: rerun Windows test after Iris missing-uniform log-level change and confirm no intrusive popup when shaderpack lacks optional uniforms.
 - Backport intentionally disables/removes newer debug entry integration paths that rely on unavailable 1.21.11 debug APIs.
+- Photon Modrinth release cadence may lag Voxy-support branch state; users on Photon `v1.2a` may report incompatibility until a newer release containing `voxy.*` files is published.
+- External modpack instability (AmbientSounds + CreativeCore) can cause world-load crashes independent of Voxy; keep shader/Voxy validation runs on a minimized dependency stack when triaging Voxy-specific issues.
