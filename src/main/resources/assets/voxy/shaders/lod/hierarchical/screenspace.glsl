@@ -155,8 +155,14 @@ bool isCulledByHiz() {
         }
     }
     //pointSample = mix(pointSample, pointSample2, pointSample<=0.000001f);
+    if (pointSample < 0.0f) {
+        return false;
+    }
 
-    return pointSample<=minBB.z;
+    // Keep Hi-Z culling conservative around overlap boundaries (vanilla terrain vs Voxy terrain).
+    // Larger mip levels have coarser depth footprints, so scale bias with mip level.
+    float hizDepthBias = 0.00025f + float(ml) * 0.00015f;
+    return (pointSample + hizDepthBias) <= minBB.z;
 }
 
 
