@@ -1,0 +1,41 @@
+name: Java CI con Gradle
+
+on:
+  push:
+    branches: [ "codex/backport-1.21.1" ]
+  pull_request:
+    branches: [ "codex/backport-1.21.1" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+    - name: Checkout del repositorio
+      uses: actions/checkout@v4
+
+    - name: Configurar Java 21
+      uses: actions/setup-java@v4
+      with:
+        java-version: '21'
+        distribution: 'temurin' # Distribución recomendada por la comunidad
+
+    - name: Validar envoltorio de Gradle (Gradle Wrapper)
+      uses: gradle/actions/wrapper-validation@v3
+
+    - name: Dar permisos de ejecución a Gradlew
+      run: chmod +x gradlew
+
+    - name: Compilar con Gradle
+      # Usamos 'build' para ejecutar tests y generar el JAR
+      run: ./gradlew build
+
+    - name: Subir Artifacts (El mod compilado)
+      uses: actions/upload-artifact@v4
+      with:
+        name: Fabric-Mod
+        # Esta ruta busca el archivo JAR generado que NO es el de "sources" ni "dev"
+        path: build/libs/*.jar
+        if-no-files-found: error
